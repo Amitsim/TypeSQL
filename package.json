@@ -1,0 +1,33 @@
+{
+  "name": "typesql",
+  "version": "1.0.0",
+  "description": "Zero-Runtime Transpiler from TypeScript to PostgreSQL",
+  "main": "dist/index.js",
+  "bin": {
+    "typesql": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/cli.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "postgresql",
+    "typescript",
+    "transpiler",
+    "orm",
+    "sql"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ts-morph": "^21.0.0",
+    "yargs": "^17.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/yargs": "^17.0.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0"
+  }
+}
