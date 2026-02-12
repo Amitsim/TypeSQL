@@ -1,7 +1,9 @@
 
 import { MethodDeclaration, Node, CallExpression } from 'ts-morph';
+import { AuthTranspiler } from './AuthConfig';
 
 export class PolicyGenerator {
+  constructor(private authTranspiler: AuthTranspiler) {}
   /**
    * Generates Row Level Security (RLS) SQL policies from a method decorated with @Security.Policy.
    */
@@ -132,10 +134,28 @@ USING (
           return this.toSnakeCase(prop);
       });
 
-      // Map security helpers: sql.auth.userId() -> auth.uid()
-      text = text.replace(/sql\.auth\.userId[^)]*\)/g, 'auth.uid()');
+      // Auth transpilation
+      text = this.transpileAuthCalls(text);
 
       return text;
+  }
+
+  /**
+   * Transpiles sql.auth.* calls to provider-specific SQL
+   */
+  private transpileAuthCalls(text: string): string {
+     // sql.auth.userId() -> provider-specific SQL
+     text = text.replace(/sql\.auth\.userId\(\)/g, this.authTranspiler.transpileUserId());
+     
+     // sql.auth.jwt<T>('claim') -> provider-specific SQL
+     text = text.replace(/sql\.auth\.jwt(?:<[^>]+>)?\((['"])([^'"]+)\1\)/g, (match, quote, claim) => {
+        return this.authTranspiler.transpileJwtClaim(claim);
+     });
+     
+     // sql.auth.isAuthenticated() -> provider-specific SQL
+     text = text.replace(/sql\.auth\.isAuthenticated\(\)/g, this.authTranspiler.transpileIsAuthenticated());
+     
+     return text;
   }
 
   private toSnakeCase(str: string): string {

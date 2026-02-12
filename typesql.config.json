@@ -1,0 +1,8 @@
+{
+  "authProvider": "PostgREST",
+  "sessionVariables": {
+    "userId": "app.current_user_id",
+    "userRole": "app.current_user_role"
+  }
+}
+ 

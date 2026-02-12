@@ -3,19 +3,30 @@ import { Project } from 'ts-morph';
 import { SchemaGenerator } from './SchemaGenerator';
 import { TriggerGenerator } from './TriggerGenerator';
 import { PolicyGenerator } from './PolicyGenerator';
+import { TypeSqlConfig, defaultConfig, AuthTranspiler } from './AuthConfig';
 
 export class TypeSqlCompiler {
   private project: Project;
   private schemaGen = new SchemaGenerator();
-  private triggerGen = new TriggerGenerator();
-  private policyGen = new PolicyGenerator();
+  private triggerGen: TriggerGenerator;
+  private policyGen: PolicyGenerator;
+  private config: TypeSqlConfig;
+  private authTranspiler: AuthTranspiler;
 
-  constructor() {
+  constructor(config?: Partial<TypeSqlConfig>) {
     // Initialize the ts-morph project using the local tsconfig.json.
     this.project = new Project({
         tsConfigFilePath: "tsconfig.json",
         skipAddingFilesFromTsConfig: true
     });
+    
+    // Merge user config with defaults
+    this.config = { ...defaultConfig, ...config };
+    this.authTranspiler = new AuthTranspiler(this.config);
+    
+    // Inject auth transpiler into generators
+    this.triggerGen = new TriggerGenerator(this.authTranspiler);
+    this.policyGen = new PolicyGenerator(this.authTranspiler);
   }
 
   /**
@@ -64,20 +75,8 @@ export class TypeSqlCompiler {
     let sqlOutput = "-- TypeSQL Generated Migration\n\n";
 
     // Injection: Infrastructure/Boilerplate for environment compatibility
-    sqlOutput += `DO $$ 
-BEGIN 
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN 
-    CREATE ROLE authenticated; 
-  END IF; 
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN 
-    CREATE ROLE anon; 
-  END IF; 
-END $$;
-
--- Mock for Supabase auth.uid() schema/functionality for local testing
-CREATE SCHEMA IF NOT EXISTS auth;
-CREATE OR REPLACE FUNCTION auth.uid() RETURNS text AS $$ SELECT '00000000-0000-0000-0000-000000000000'; $$ LANGUAGE sql;
-\n\n`;
+    sqlOutput += this.generateRoleSetup();
+    sqlOutput += this.generateAuthSetup();
 
     // Assembly: Order is critical for dependency resolution (Tables -> Logic -> Policies)
     sqlOutput += tables.join('\n\n') + '\n\n';
@@ -85,5 +84,39 @@ CREATE OR REPLACE FUNCTION auth.uid() RETURNS text AS $$ SELECT '00000000-0000-0
     sqlOutput += policies.join('\n\n');
 
     return sqlOutput;
+  }
+
+  /**
+   * Generates role setup SQL
+   */
+  private generateRoleSetup(): string {
+    return `DO $$ 
+BEGIN 
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN 
+    CREATE ROLE authenticated; 
+  END IF; 
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN 
+    CREATE ROLE anon; 
+  END IF; 
+END $$;\n\n`;
+  }
+
+  /**
+   * Generates auth setup SQL based on provider target
+   */
+  private generateAuthSetup(): string {
+    switch (this.config.authProvider) {
+      case 'PostgREST':
+        // PostgREST will provide request.jwt.claim.* automatically
+        return `-- Auth Provider: PostgREST/Supabase\n-- Session context available via request.jwt.claim.*\n\n`;
+      case 'Session':
+        // Provide helper functions for setting session variables
+        return `-- Auth Provider: Session Variables\n-- Set session context using: SELECT set_config('${this.config.sessionVariables?.userId}', 'user_id_here', false);\n\n`;
+      case 'Native':
+        // Native uses current_user
+        return `-- Auth Provider: Native Postgres Roles\n-- Use SET ROLE to switch users\n\n`;
+      default:
+        return '';
+    }
   }
 }

@@ -98,9 +98,18 @@ export const sql = {
   now: () => ({
     minus: (interval: string) => '' as unknown as SqlDate,
   }) as unknown as SqlDate,
-  /** Security helpers mapping to auth.uid() */
+  /** Provider-agnostic security context */
   auth: {
+    /** Returns the unique identifier of the current session user */
     userId: () => '' as unknown as string,
+    /** Accesses specific JWT claims/metadata (e.g., role, org_id, plan) */
+    jwt: <T = string>(claim: string) => '' as unknown as T,
+    /** Boolean check to see if a session exists */
+    isAuthenticated: () => true as unknown as boolean,
+    
+    // Testing utilities (compile-time only, stripped in production)
+    _mockUser: (userId: string) => {},
+    _mockClaim: (claim: string, value: any) => {},
   },
   /** LINQ-style entry point for database queries inside triggers */
   from: <T>(table: new () => T) => {

@@ -1,7 +1,10 @@
 
 import { MethodDeclaration, Node, SyntaxKind, CallExpression, BinaryExpression, ThrowStatement, IfStatement, ClassDeclaration } from 'ts-morph';
+import { AuthTranspiler } from './AuthConfig';
 
 export class TriggerGenerator {
+  constructor(private authTranspiler: AuthTranspiler) {}
+  
   generate(method: MethodDeclaration): string {
     const triggerDec = method.getDecorator('Trigger');
     if (!triggerDec) return '';
@@ -193,6 +196,27 @@ FOR EACH ROW EXECUTE FUNCTION ${funcName}();
         return `(now() - ${interval.replace(/"/g, "'")}::interval)`;
      });
 
+     // Auth transpilation
+     text = this.transpileAuthCalls(text);
+
+     return text;
+  }
+
+  /**
+   * Transpiles sql.auth.* calls to provider-specific SQL
+   */
+  private transpileAuthCalls(text: string): string {
+     // sql.auth.userId() -> provider-specific SQL
+     text = text.replace(/sql\.auth\.userId\(\)/g, this.authTranspiler.transpileUserId());
+     
+     // sql.auth.jwt<T>('claim') -> provider-specific SQL
+     text = text.replace(/sql\.auth\.jwt(?:<[^>]+>)?\((['"])([^'"]+)\1\)/g, (match, quote, claim) => {
+        return this.authTranspiler.transpileJwtClaim(claim);
+     });
+     
+     // sql.auth.isAuthenticated() -> provider-specific SQL
+     text = text.replace(/sql\.auth\.isAuthenticated\(\)/g, this.authTranspiler.transpileIsAuthenticated());
+     
      return text;
   }
 

@@ -11,4 +11,7 @@ export class User {
 
     @Column({ default: 0 })
     reputation: number; // Transpiles to INTEGER
+
+    @Column({ default: () => sql.now() })
+    createdAt: Date; // Transpiles to TIMESTAMPTZ
 }
